@@ -1,0 +1,15 @@
+# Ignorar entornos virtuales
+venv/
+env/
+.venv/
+
+# Ignorar archivos de caché de Python
+__pycache__/
+*.pyc
+
+# Ignorar variables de entorno reales (por seguridad, se inyectan en el run)
+.env
+
+# Ignorar base de datos local o basura del sistema
+*.db
+.DS_Store
