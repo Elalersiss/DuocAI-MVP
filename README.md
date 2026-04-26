@@ -1,6 +1,6 @@
 # DuocAI: Asistente RAG de Normativas Institucionales 📚
 
-**Desarrollado por:** Alexis
+**Desarrollado por:** Alexis Margas
 **Asignatura:** Ingeniería de Soluciones con IA (ISY0101)
 
 ## Descripción del Proyecto
