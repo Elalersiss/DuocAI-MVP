@@ -80,60 +80,60 @@ LANGCHAIN_API_KEY=<su-api-key-de-langsmith>
 
 ## Guía de Ejecución del Proyecto
 
-# Una vez configuradas las variables de entorno en el archivo .env y 
-# creado el índice en MongoDB Atlas, elija UNO de los siguientes métodos 
-# para poner en marcha DuocAI:
+Una vez configuradas las variables de entorno en el archivo `.env` y creado el índice en MongoDB Atlas, elija **UNO** de los siguientes métodos para poner en marcha DuocAI:
 
-# ====================================================================
-# OPCIÓN A: Ejecución mediante Contenedores (Podman / Docker)
-# ====================================================================
-# ¡Recomendado! Al usar esta opción, se ahorra completamente el paso 
-# de instalar Python y dependencias (pip install) en su máquina local. 
-# El Containerfile se encarga de empaquetar el entorno por usted.
+### 1. Opción A: Ejecución mediante Contenedores (Podman / Docker)
 
-# 1. Construir la imagen:
-# Este comando leerá el Containerfile e instalará las dependencias 
-# de forma aislada dentro de la imagen.
-podman build -t duocai-app .
+**¡Recomendado!** Al usar esta opción, se ahorra completamente el paso de instalar Python y dependencias de forma local. El `Containerfile` se encarga de empaquetar y aislar el entorno por usted.
 
-# 2. Ingesta de Documentos (Dentro del contenedor):
-# Corremos el script de ingesta utilizando la imagen recién creada. 
-# El parámetro --rm elimina este contenedor temporal al terminar de 
-# subir los datos a MongoDB Atlas.
-podman run --rm --env-file .env duocai-app python ingest.py
+* **Construir la imagen:** Este comando leerá el archivo de configuración e instalará las dependencias de forma aislada dentro de la imagen.
+    ```bash
+    podman build -t duocai-app .
+    ```
 
-# 3. Levantar la Interfaz:
-# Levantamos el contenedor final mapeando el puerto 8501 para 
-# poder acceder a la página web desde nuestra máquina anfitriona.
-podman run -p 8501:8501 --env-file .env duocai-app
+* **Ingesta de Documentos (Dentro del contenedor):** Corremos el script de ingesta utilizando la imagen recién creada. El parámetro `--rm` elimina este contenedor temporal al terminar de subir los datos a MongoDB Atlas.
+    ```bash
+    podman run --rm --env-file .env duocai-app python ingest.py
+    ```
 
-# ====================================================================
-# OPCIÓN B: Ejecución 100% Local (Requiere Python instalado)
-# ====================================================================
+* **Levantar la Interfaz:** Levantamos el contenedor final mapeando el puerto `8501` para poder acceder a la aplicación web desde nuestra máquina anfitriona.
+    ```bash
+    podman run -p 8501:8501 --env-file .env duocai-app
+    ```
 
-# 1. Creación y Activación del Entorno Virtual (Recomendado):
-# Para evitar conflictos de versiones en su sistema, es una buena práctica 
-# aislar las dependencias creando un entorno virtual:
-python -m venv venv
+---
 
-# Actívelo dependiendo de su sistema operativo:
-# En Windows:
-venv\Scripts\activate
-# En macOS/Linux:
-# source venv/bin/activate
+### 2. Opción B: Ejecución 100% Local (Requiere Python instalado)
 
-# 2. Instalación de Dependencias:
-# Para ejecutar los scripts localmente, primero debe instalar todas las 
-# librerías necesarias (LangChain, Streamlit, PyMongo, etc.).
-pip install -r requirements.txt
+* **Creación del Entorno Virtual (Recomendado):** Para evitar conflictos de versiones en su sistema, es una buena práctica aislar las dependencias creando un entorno virtual:
+    ```bash
+    python -m venv venv
+    ```
 
-# 3. Ingesta de Documentos (Obligatorio la primera vez):
-# Dado que su clúster de MongoDB es nuevo y está vacío, debe cargar el 
-# conocimiento de los PDFs institucionales en la base de datos vectorial.
-python ingest.py
+* **Activación del Entorno:** Active el entorno virtual dependiendo de su sistema operativo:
+    * **En Windows:**
+        ```bash
+        venv\Scripts\activate
+        ```
+    * **En macOS/Linux:**
+        ```bash
+        source venv/bin/activate
+        ```
 
-# 4. Levantar la Interfaz (Streamlit):
-# Finalmente, ejecute la aplicación para interactuar con el asistente.
-streamlit run app.py
+* **Instalación de Dependencias:** Una vez activado el entorno, instale todas las librerías necesarias (*LangChain, Streamlit, PyMongo, etc.*) utilizando el archivo de requerimientos:
+    ```bash
+    pip install -r requirements.txt
+    ```
 
-# La aplicación se abrirá en su navegador en: http://localhost:8501
+* **Ingesta de Documentos (Obligatorio la primera vez):** Dado que su clúster de MongoDB es nuevo y está vacío, debe cargar el conocimiento de los PDFs institucionales en la base de datos vectorial antes de realizar consultas:
+    ```bash
+    python ingest.py
+    ```
+
+* **Levantar la Interfaz (Streamlit):** Finalmente, ejecute la aplicación para interactuar con el asistente virtual:
+    ```bash
+    streamlit run app.py
+    ```
+
+> **Nota:** La aplicación se abrirá automáticamente en su navegador apuntando a: `http://localhost:8501`
+
