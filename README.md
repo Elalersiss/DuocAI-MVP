@@ -48,7 +48,7 @@ Una vez que el clúster esté creado y haya ejecutado el proyecto por primera ve
 5.  En el apartado de **Index Name**, debe poner el nombre de **`vector_index`**.
 6.  Un poco mas abajo, en el menu desplegable que llevara el nombre de la base de datos, seleccione la colección donde hizo la ingesta, que por default viene como **`duoc_normativas`**.
 7.  Dentro de las opciones de **Configuration Method**, seleccione **JSON Editor** y presione *Next*.
-9.  En el editor de texto, pegue la siguiente configuración JSON:
+8.  En el editor de texto, pegue la siguiente configuración JSON:
 
 ```json
 {
@@ -73,4 +73,4 @@ Una vez que el clúster esté creado y haya ejecutado el proyecto por primera ve
 * **`similarity: "cosine"`**: Utiliza la similitud de coseno para medir la relevancia semántica de los documentos recuperados. Este algoritmo es ideal para comparar vectores de texto, ya que se enfoca en la orientación (contexto) más que en la magnitud.
 * **`metadata.domain`**: Configurado como tipo `filter` para permitir la segmentación estricta de los documentos institucionales. Esto habilita al sistema para discriminar búsquedas entre distintos reglamentos (Académico, Becas, etc.) de forma eficiente.
 
-10.  Finalmente da en **Next** y en **Create Vector Search Index** para crear el index.
+9.  Finalmente da en **Next** y en **Create Vector Search Index** para crear el index.
