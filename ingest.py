@@ -7,9 +7,9 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_mongodb import MongoDBAtlasVectorSearch
 
 # ==============================================================================
-# 1. CONFIGURACIÓN INICIAL Y VARIABLES DE ENTORNO
-# Carga de credenciales y configuración estática de la arquitectura de datos.
+# 1. CONFIGURACIÓN DEL ENTORNO Y CONTEXTO DE BASE DE DATOS
 # ==============================================================================
+# Carga de variables de entorno e inicialización de constantes de infraestructura
 load_dotenv()
 
 MONGO_URI = os.getenv("MONGO_URI")
@@ -17,13 +17,20 @@ DB_NAME = "duocai_db"
 COLLECTION_NAME = "duoc_normativas" 
 ATLAS_VECTOR_SEARCH_INDEX_NAME = "vector_index" 
 
+# ==============================================================================
+# 2. PIPELINE DE EXTRACCIÓN, TRANSFORMACIÓN Y CARGA (ETL MAINSTREAM)
+# ==============================================================================
 def main():
+    """
+    Ejecuta el pipeline de ingeniería de datos automatizado (ETL).
+    
+    Establece conexión con MongoDB Atlas, realiza una purga atómica preventiva,
+    extrae texto local aplicando clasificación heurística de metadatos,
+    fragmenta semánticamente los documentos y los indexa en el clúster vectorial.
+    """
     print("Iniciando pipeline de ingesta de datos (ETL)...")
 
-    # ==============================================================================
-    # 2. CONEXIÓN A LA BASE DE DATOS (MONGODB ATLAS)
-    # Establece la conexión con el clúster en la nube utilizando el URI seguro.
-    # ==============================================================================
+    # Conexión síncrona al clúster de base de datos en la nube
     try:
         client = MongoClient(MONGO_URI)
         collection = client[DB_NAME][COLLECTION_NAME]
@@ -32,33 +39,23 @@ def main():
         print(f"Error crítico conectando a MongoDB: {e}")
         return
 
-    # ==============================================================================
-    # 3. PURGA DE DATOS EXISTENTES (ETL CLEANUP)
-    # Elimina los documentos previos en la colección para evitar duplicidad de 
-    # vectores, manteniendo intacta la configuración del índice de búsqueda.
-    # ==============================================================================
+    # Sincronización preventiva para evitar colisión o duplicación de vectores
     print("Ejecutando purga de la base de datos anterior...")
     resultado_borrado = collection.delete_many({})
     print(f"Se eliminaron {resultado_borrado.deleted_count} fragmentos obsoletos.")
 
-    # ==============================================================================
-    # 4. EXTRACCIÓN Y ASIGNACIÓN DE METADATOS (DATA EXTRACTION)
-    # Recorre el directorio de origen, identifica el formato del documento y 
-    # aplica el loader correspondiente, inyectando metadatos para el filtrado RAG.
-    # ==============================================================================
+    # Lectura del directorio local de almacenamiento documental
     print("Extrayendo texto desde el directorio local 'data/'...")
-    
     docs_totales = [] 
     
     for archivo in os.listdir("data"):
         ruta = os.path.join("data", archivo)
         
-        # Clasificación heurística basada en la nomenclatura del archivo
+        # Clasificación heurística para la inyección programática de metadatos
         categoria_asignada = "financiamiento" if "beca" in archivo.lower() or "financiamiento" in archivo.lower() else "academico"
-        
         docs_cargados = []
         
-        # Selección dinámica de la herramienta de extracción según extensión
+        # Enrutamiento dinámico de cargadores según la extensión del archivo fuente
         if archivo.endswith(".docx"):
             print(f"Procesando Word: {archivo} | Categoría de Metadato: {categoria_asignada}")
             docs_cargados = Docx2txtLoader(ruta).load()
@@ -69,45 +66,34 @@ def main():
             print(f"Procesando TXT: {archivo} | Categoría de Metadato: {categoria_asignada}")
             docs_cargados = TextLoader(ruta, encoding="utf-8").load()
             
-        # Inyección del campo 'categoria' en los metadatos del objeto Document
+        # Inyección estructural del campo metadato para optimización del RAG
         for doc in docs_cargados:
             doc.metadata["categoria"] = categoria_asignada
             
-        # Consolidación estructural en la lista maestra
         docs_totales.extend(docs_cargados) 
     
-    # Validación de integridad de la fase de extracción
+    # Validación de control de calidad sobre la fase de carga física
     if not docs_totales:
         print("Error de Extracción: No se encontraron documentos válidos en el directorio 'data/'.")
         return
     
     print(f"Se consolidaron {len(docs_totales)} páginas/documentos en total.")
 
-    # ==============================================================================
-    # 5. FRAGMENTACIÓN DE DOCUMENTOS (CHUNKING)
-    # Divide los textos largos en fragmentos procesables (chunks) para preservar
-    # el contexto semántico y respetar la ventana de tokens del LLM.
-    # ==============================================================================
+    # Fragmentación recursiva para preservación del contexto legal y de párrafos
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1200,    # Tamaño óptimo para capturar secciones normativas completas
-        chunk_overlap=300   # Solapamiento para garantizar la cohesión entre párrafos
+        chunk_size=1200,    # Extensión de caracteres por fragmento contextual
+        chunk_overlap=300   # Margen de redundancia histórica del veinticinco por ciento
     )
     splits = text_splitter.split_documents(docs_totales)
     print(f"Documentos fragmentados en {len(splits)} chunks contextuales.")
 
-    # ==============================================================================
-    # 6. GENERACIÓN DE EMBEDDINGS (VECTORIZACIÓN)
-    # Transforma el texto humano en representaciones vectoriales multidimensionales.
-    # ==============================================================================
+    # Inicialización local y vectorización densa mediante HuggingFace
     print("Inicializando modelo de embeddings multilingüe...")
     embeddings = HuggingFaceEmbeddings(
         model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     )
 
-    # ==============================================================================
-    # 7. INGESTA EN LA BASE DE DATOS VECTORIAL (LOAD)
-    # Sube los fragmentos transformados y sus vectores a la colección en la nube.
-    # ==============================================================================
+    # Carga y almacenamiento del set de vectores densos en el indexador de Atlas
     print("Sincronizando vectores y metadatos con MongoDB Atlas...")
     MongoDBAtlasVectorSearch.from_documents(
         documents=splits,
@@ -118,5 +104,8 @@ def main():
     
     print("¡Pipeline ETL completado con éxito! Arquitectura de datos lista para consultas.")
 
+# ==============================================================================
+# 3. DISPARADOR DE EJECUCIÓN
+# ==============================================================================
 if __name__ == "__main__":
     main()

@@ -1,20 +1,31 @@
-# Entornos virtuales
+# Directorios de entornos virtuales locales
 venv/
 env/
 .venv/
 
-# Archivos de caché de Python
+# Archivos de caché y compilación de Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 
-# Archivos de variables de entorno (¡CRÍTICO: NUNCA SUBIR EL REAL!)
+# Variables de entorno y llaves de API sensibles
 .env
 
-# Archivos de sistema operativo local
+# Archivos temporales generados por el sistema operativo
 .DS_Store
 Thumbs.db
 
-# Carpetas de metadatos de VS Code
+# Configuraciones de entorno de trabajo y metadatos de VS Code
 .vscode/
+
+# Archivos de configuración interna y secretos locales de Streamlit
+.streamlit/
+
+# Bases de datos SQLite y persistencia de memoria local del framework
+*.db
+*.sqlite
+
+# Exclusión de documentos institucionales binarios pesados en la carpeta de datos
+# data/*.pdf
+# data/*.docx

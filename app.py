@@ -1,161 +1,52 @@
-import os
-from dotenv import load_dotenv
 import streamlit as st
-from pymongo import MongoClient
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_mongodb import MongoDBAtlasVectorSearch
-from langchain_openai import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate
+from main import ejecutar_agente_duoc
 
 # ==============================================================================
-# 1. CONFIGURACIÓN INICIAL Y VARIABLES DE ENTORNO
-# Se cargan las credenciales (API Keys, URIs) desde el archivo .env para 
-# garantizar la seguridad de las conexiones externas.
+# 1. CONFIGURACIÓN DE LA INTERFAZ DE USUARIO (FRONT-END)
 # ==============================================================================
-load_dotenv()
+# Inicialización de las propiedades del sitio web y descripción base del servicio
+st.set_page_config(page_title="DuocAI - Sistema Agéntico", page_icon="🤖")
+st.title("DuocAI: Asistente con Agentes Autónomos")
+st.markdown("""
+    Bienvenido. Este sistema utiliza un **Agente Investigador** y un **Asesor Estudiantil** orquestados jerárquicamente para responder tus dudas académicas y de becas.
+""")
 
 # ==============================================================================
-# 2. CONFIGURACIÓN DE LA INTERFAZ DE USUARIO (FRONTEND)
-# Inicialización de la aplicación web utilizando Streamlit.
+# 2. GESTIÓN DE PERSISTENCIA E HISTORIAL DE CONVERSACIÓN
 # ==============================================================================
-st.set_page_config(page_title="DuocAI - Asistente RAG", page_icon="📚")
-st.title("DuocAI: Asistente de Reglamentos")
-st.markdown("¡Hola! Soy tu asistente de estudio. Pregúntame sobre las normativas institucionales.")
-
-# 2.1. Panel Lateral (Sidebar) para Filtros de Metadatos
-st.sidebar.title("⚙️ Filtros de Búsqueda")
-st.sidebar.markdown("Optimiza la precisión del modelo aislando el contexto de búsqueda.")
-filtro_usuario = st.sidebar.selectbox(
-    "Seleccione el dominio de documentos:", 
-    ["Búsqueda Global (Todo)", "Solo Financiamiento y Becas", "Solo Reglamentos Académicos"]
-)
-
-# ==============================================================================
-# 3. GESTIÓN DE ESTADO DE LA SESIÓN (SESSION STATE)
-# Mantiene el historial de la conversación en la memoria temporal de la app 
-# para renderizar los mensajes en cada recarga de la pantalla.
-# ==============================================================================
+# Inicialización del estado de sesión para el almacenamiento persistente de mensajes
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Renderizar el historial de chat en la interfaz
+# Renderizado síncrono de los componentes de chat almacenados históricamente
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
 # ==============================================================================
-# 4. INICIALIZACIÓN DEL PIPELINE RAG (CACHÉ DE RECURSOS)
-# Se utiliza @st.cache_resource para instanciar las conexiones pesadas a la 
-# base de datos y los modelos de IA una sola vez, optimizando el rendimiento.
+# 3. INTERACCIÓN Y ENLACE CON EL FLUJO MULTI-AGENTE (CORE)
 # ==============================================================================
-@st.cache_resource
-def init_rag_pipeline():
-    # 4.1. Conexión a la base de datos vectorial (MongoDB Atlas)
-    client = MongoClient(os.getenv("MONGO_URI"))
-    collection = client["duocai_db"]["duoc_normativas"] 
+# Captura del input del usuario a través del componente de entrada de texto nativo
+if user_input := st.chat_input("Escribe tu consulta aquí..."):
     
-    # 4.2. Inicialización del modelo de Embeddings multilingüe
-    embeddings = HuggingFaceEmbeddings(
-        model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-    )
-    
-    # 4.3. Configuración del motor de búsqueda vectorial
-    vector_store = MongoDBAtlasVectorSearch(
-        collection=collection,
-        embedding=embeddings,
-        index_name="vector_index"
-    )
-    
-    # 4.4. Instanciación del Modelo de Lenguaje (LLM) vía GitHub Models
-    llm = ChatOpenAI(
-        model="gpt-4o",
-        api_key=os.getenv("GITHUB_TOKEN"),
-        base_url="https://models.inference.ai.azure.com", 
-        temperature=0.0 # Temperatura 0 para evitar alucinaciones en normativas
-    )
-    
-    # 4.5. Configuración del Prompt del Sistema (Ingeniería de Prompts)
-    system_prompt = (
-        "Eres DuocAI, el asistente virtual oficial de normativas de Duoc UC.\n"
-        "A continuación se te proporcionan fragmentos de texto recuperados de la base de datos oficial.\n\n"
-        "---------------------\n"
-        "CONTEXTO RECUPERADO:\n"
-        "{context}\n"
-        "---------------------\n\n"
-        "INSTRUCCIONES ESTRICTAS:\n"
-        "1. Responde basándote ÚNICAMENTE en el CONTEXTO RECUPERADO. Si el contexto menciona varios documentos, "
-        "PRIORIZA la información del 'Folleto de Financiamiento' y el 'Reglamento General de Becas' para consultas sobre beneficios económicos.\n"
-        "2. Si el contexto NO contiene la información, responde: 'Mis registros normativos actuales no contienen información detallada sobre esa consulta.'\n"
-        "3. Haz un listado EXHAUSTIVO de todas las becas y beneficios presentes en el contexto, sin omitir ninguna. Enuméralos claramente indicando sus requisitos y porcentajes de cobertura, e incluye explícitamente los Beneficios Estatales (Gratuidad, CAE, etc.) si aparecen en los fragmentos.\n"
-        "4. Si te preguntan qué documentos tienes, responde: Folleto de Financiamiento, Reglamento General de Becas, Reglamento Académico Online y Presencial."
-    )
-    
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", system_prompt),
-        ("human", "{input}"),
-    ])
-    
-    return vector_store, llm, prompt
-
-# Ejecución de la inicialización con manejo de excepciones
-try:
-    vector_store, llm, prompt = init_rag_pipeline()
-except Exception as e:
-    st.error(f"Error crítico al inicializar la arquitectura: {e}")
-    st.stop()
-
-# ==============================================================================
-# 5. APLICACIÓN DE FILTROS DINÁMICOS Y CONFIGURACIÓN DEL RETRIEVER
-# Ajusta los parámetros de búsqueda en MongoDB según la selección del usuario.
-# ==============================================================================
-search_kwargs = {"k": 15} # Número de fragmentos (chunks) a recuperar
-
-if filtro_usuario == "Solo Financiamiento y Becas":
-    search_kwargs["pre_filter"] = {"categoria": {"$eq": "financiamiento"}}
-elif filtro_usuario == "Solo Reglamentos Académicos":
-    search_kwargs["pre_filter"] = {"categoria": {"$eq": "academico"}}
-
-retriever = vector_store.as_retriever(
-    search_type="similarity",
-    search_kwargs=search_kwargs
-)
-
-# ==============================================================================
-# 6. FLUJO PRINCIPAL DE INTERACCIÓN Y GENERACIÓN AUMENTADA
-# Captura el input del usuario, recupera el contexto, y genera la respuesta.
-# ==============================================================================
-if user_input := st.chat_input("Escribe tu consulta normativa aquí..."):
-    
-    # 6.1. Mostrar input del usuario en pantalla
+    # Procesamiento y visualización inmediata del mensaje emitido por el estudiante
     st.session_state.messages.append({"role": "user", "content": user_input})
     with st.chat_message("user"):
         st.markdown(user_input)
 
-    # 6.2. Procesamiento del pipeline RAG
+    # Contenedor de respuesta del asistente con bloqueador dinámico (spinner)
     with st.chat_message("assistant"):
-        with st.spinner("Consultando normativas en la base de datos institucional..."):
+        with st.spinner("Los agentes están colaborando en tu respuesta..."):
+            try:
+                # Invocación de la capa lógica y orquestación jerárquica de CrewAI
+                respuesta_agentes = ejecutar_agente_duoc(user_input)
+                
+                # Renderizado de la síntesis final generada por el asesor estudiantil
+                st.markdown(respuesta_agentes)
+                
+                # Persistencia de la respuesta del sistema en el historial de sesión
+                st.session_state.messages.append({"role": "assistant", "content": respuesta_agentes})
             
-            # A. Recuperación de documentos relevantes (Retrieval)
-            docs_recuperados = retriever.invoke(user_input)
-            
-            # B. Ensamblaje del contexto
-            contexto_unido = "\n\n".join([doc.page_content for doc in docs_recuperados])
-            
-            # C. Inyección de contexto al LLM y generación de respuesta (Generation)
-            prompt_listo = prompt.invoke({"context": contexto_unido, "input": user_input})
-            respuesta_llm = llm.invoke(prompt_listo)
-            answer = respuesta_llm.content
-            
-            # D. Renderizar respuesta
-            st.markdown(answer)
-
-    # -------------------------------------------------------------------------
-    # BLOQUE DE DEPURACIÓN EN TERMINAL (Trazabilidad para el desarrollador)
-    # -------------------------------------------------------------------------
-    print(f"\n--- LOG: RECUPERACIÓN MONGODB (Filtro: {filtro_usuario}) ---")
-    for i, doc in enumerate(docs_recuperados):
-        print(f"\n[Fragmento {i+1}]: {doc.page_content[:200]}...") 
-    print("-------------------------------------------------------------\n")
-
-    # 6.3. Guardar la respuesta del modelo en el historial de sesión
-    st.session_state.messages.append({"role": "assistant", "content": answer})
+            except Exception as e:
+                # Control, captura y despliegue visual de excepciones en la interfaz gráfica
+                st.error(f"Error en la orquestación: {e}")

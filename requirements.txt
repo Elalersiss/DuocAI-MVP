@@ -1,12 +1,16 @@
+crewai
+litellm
 streamlit
 python-dotenv
 pymongo
+pydantic
 langchain
 langchain-community
 langchain-text-splitters
 langchain-huggingface
 langchain-mongodb
 langchain-openai
+langsmith
 pymupdf
 docx2txt
 sentence-transformers

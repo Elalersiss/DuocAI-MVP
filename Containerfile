@@ -1,20 +1,38 @@
-# 1. Imagen base oficial de Python (ligera y optimizada)
+# ==============================================================================
+# 1. CONFIGURACIÓN DE LA IMAGEN BASE
+# ==============================================================================
+# Selección del entorno de ejecución oficial de Python en su versión estable y reducida
 FROM python:3.11-slim
 
-# 2. Establecer el directorio de trabajo dentro del contenedor
+# ==============================================================================
+# 2. DEFINICIÓN DEL ENTORNO DE TRABAJO
+# ==============================================================================
+# Creación y establecimiento del directorio raíz para la aplicación interna del contenedor
 WORKDIR /app
 
-# 3. Copiar el archivo de dependencias primero (aprovecha la caché de capas de Podman)
+# ==============================================================================
+# 3. GESTIÓN E INSTALACIÓN DE DEPENDENCIAS
+# ==============================================================================
+# Transferencia aislada del manifiesto de librerías para optimizar la caché de capas de compilación
 COPY requirements.txt .
 
-# 4. Instalar todas las librerías necesarias
+# Ejecución del gestor de paquetes pip omitiendo el almacenamiento de archivos temporales
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 5. Copiar el resto del código fuente y los datos (app.py, ingest.py, carpeta data/)
+# ==============================================================================
+# 4. TRANSFERENCIA DE CÓDIGO FUENTE Y RECURSOS
+# ==============================================================================
+# Copia estructurada del árbol del proyecto incluyendo scripts lógicos, automatizaciones y datos
 COPY . .
 
-# 6. Exponer el puerto por defecto de Streamlit
+# ==============================================================================
+# 5. CONFIGURACIÓN DE RED Y REDIRECCIÓN DE PUERTOS
+# ==============================================================================
+# Declaración de apertura del puerto lógico asignado para la comunicación del servicio
 EXPOSE 8501
 
-# 7. Comando de ejecución al encender el contenedor (0.0.0.0 permite acceso desde fuera del contenedor)
+# ==============================================================================
+# 6. DECLARACIÓN DEL COMANDO DE INICIALIZACIÓN
+# ==============================================================================
+# Punto de entrada para levantar la interfaz Streamlit enlazando el mapeo de red de escucha global
 CMD ["streamlit", "run", "app.py", "--server.address=0.0.0.0", "--server.port=8501"]
