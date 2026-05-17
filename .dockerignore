@@ -1,15 +1,48 @@
-# Ignorar entornos virtuales
+# ==============================================================================
+# 1. ENTORNOS VIRTUALES (EVITA DUPLICIDAD DE BINARIOS DEL ANFITRIÓN)
+# ==============================================================================
 venv/
 env/
 .venv/
 
-# Ignorar archivos de caché de Python
+# ==============================================================================
+# 2. CACHÉ Y COMPILACIÓN DE RUNTIME DE PYTHON
+# ==============================================================================
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
 
-# Ignorar variables de entorno reales (por seguridad, se inyectan en el run)
+# ==============================================================================
+# 3. SEGURIDAD DE CREDENCIALES (SE INYECTAN DINÁMICAMENTE CON --ENV-FILE)
+# ==============================================================================
 .env
+.env.example
 
-# Ignorar base de datos local o basura del sistema
-*.db
+# ==============================================================================
+# 4. SISTEMA DE CONTROL DE VERSIONES (REDUCE EL TAMAÑO DEL CONTEXTO DE CONSTRUCCIÓN)
+# ==============================================================================
+.git/
+.gitignore
+.gitattributes
+
+# ==============================================================================
+# 5. METADATOS DE ENTORNOS DE DESARROLLO E IDEs
+# ==============================================================================
+.vscode/
+.idea/
+
+# ==============================================================================
+# 6. DOCUMENTACIÓN COLOQUIAL (INNECESARIA PARA EL RUNTIME DE STREAMLIT)
+# ==============================================================================
+README.md
+*.docx
+*.pdf
+
+# ==============================================================================
+# 7. ARCHIVOS TEMPORALES Y PERSISTENCIA LOCAL DE BASES DE DATOS
+# ==============================================================================
 .DS_Store
+Thumbs.db
+*.db
+*.sqlite
