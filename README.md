@@ -1,44 +1,59 @@
-# DuocAI: Asistente RAG de Normativas Institucionales 📚
+# DuocAI: Asistente RAG Multi-Agente de Normativas Institucionales 📚
 
-**Desarrollado por:** Alexis Margas
-**Asignatura:** Ingeniería de Soluciones con IA (ISY0101)
+**Desarrollado por el equipo:** Alexis Margas 
+**Carrera:** Ingeniería en Informática, Duoc UC  
+**Asignatura:** Ingeniería de Soluciones con Inteligencia Artificial (ISY0101-002D)  
+**Profesor Guía:** Francisco Andrés Macaya Matas  
 
-## Descripción del Proyecto
-DuocAI es una solución basada en Inteligencia Artificial diseñada para optimizar la consulta y recuperación de normativas institucionales (Reglamentos Académicos y de Financiamiento). Utiliza una arquitectura RAG (Retrieval-Augmented Generation) para garantizar que las respuestas del modelo estén 100% fundamentadas en documentos oficiales, eliminando alucinaciones y proporcionando trazabilidad exacta de la información.
+---
 
-## Arquitectura Técnica
-- **Frontend:** Interfaz interactiva desarrollada en `Streamlit`.
-- **Pipeline ETL & Chunking:** Extracción de documentos (PDF, DOCX, TXT) y fragmentación semántica usando `LangChain` (RecursiveCharacterTextSplitter).
-- **Embeddings:** Vectorización multilingüe local mediante `HuggingFace` (*paraphrase-multilingual-MiniLM-L12-v2*).
-- **Base de Datos Vectorial:** Almacenamiento e indexación de alta dimensión en `MongoDB Atlas Vector Search` con filtrado dinámico por metadatos.
-- **LLM:** Inferencia mediante `GPT-4o` / `GPT-4o-mini` consumido a través de la API de GitHub Models.
-- **Despliegue:** Empaquetado y containerización mediante `Podman` / `Docker`.
+## 📖 Descripción del Proyecto
 
-## Requisitos Previos y Configuración de MongoDB Atlas
+DuocAI es una solución empresarial basada en Inteligencia Artificial diseñada para optimizar y centralizar la consulta de normativas institucionales, reglamentos académicos y políticas de financiamiento dentro de Duoc UC. 
 
-Para que el motor RAG de DuocAI pueda almacenar los embeddings y realizar consultas semánticas, es necesario configurar un entorno en la nube utilizando MongoDB Atlas. Siga estos pasos detallados para inicializar su base de datos.
+El sistema evoluciona el paradigma clásico de Recuperación Aumentada por Generación (RAG) hacia una **Arquitectura Híbrida Multi-Agente Jerárquica**. Esto garantiza que las consultas de los estudiantes se respondan de forma fluida y empática, manteniendo un control estricto de la verdad fáctica mediante el aislamiento de dos capas de datos diferenciadas: una capa probabilística para textos normativos ambiguos y una capa determinista local para plazos cronológicos rígidos, eliminando por completo las alucinaciones algorítmicas.
+
+---
+
+## 🏗️ Arquitectura Técnica y Componentes
+
+El ecosistema del software se encuentra modularizado en las siguientes capas tecnológicas integradas:
+
+- **Capa de Presentación (Front-End):** Interfaz gráfica interactiva y conversacional construida en `Streamlit` (`app.py`), diseñada para mitigar la carga cognitiva del usuario y mantener un historial persistente de sesión.
+- **Orquestación Cognitiva (CrewAI Hierarchical):** Motor multi-agente en `main.py` gobernado de forma jerárquica por un modelo supervisor (`manager_llm`). Este descompone consultas complejas y coordina las tareas del **Agente Investigador Normativo** (auditor técnico de documentos) y el **Agente Asesor de Apoyo al Estudiante** (traductor de lenguaje normativo a un tono amigable e institucional).
+- **Capa de Recuperación Híbrida (Capa de Datos Desacoplada):**
+  - *Recuperación Probabilística RAG:* Herramienta dedicada (`consultar_reglamentos_duoc`) que ejecuta búsquedas de registros no estructurados sobre embeddings densos vectorizados.
+  - *Recuperación Determinista Local:* Herramienta dedicada (`consultar_fechas_calendario`) que realiza accesos físicos directos al objeto estructurado `Calendario-Académico-Base-2026_v7.json` empleando rutas absolutas dinámicas calculadas en tiempo de ejecución.
+- **Capa de Infraestructura y Servicios Cloud:**
+  - *Base de Datos Vectorial:* Clúster en la nube `MongoDB Atlas Vector Search` indexado mediante algoritmos de similitud de coseno.
+  - *Modelos de Lenguaje (LLMs):* Motor de inferencia `gpt-4o-mini` consumido a través del endpoint de alto rendimiento de `GitHub Models`.
+  - *Embeddings:* Modelo multilingüe local `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` (`langchain_huggingface`), con un consumo de API equivalente a costo cero.
+- **Capa de Observabilidad (Enterprise Tracing):** Sistema de auditoría integrado mediante el SDK nativo de `LangSmith`. Intercepta los payloads de entrada/salida y las latencias de ejecución agéntica.
+
+---
+
+## 🛠️ Requisitos Previos y Configuración de MongoDB Atlas
+
+Para que el motor híbrido pueda almacenar los embeddings generados por el pipeline ETL y realizar la vectorización síncrona en producción, es obligatorio aprovisionar un clúster en la nube.
 
 ### 1. Creación de Cuenta, Proyecto y Clúster
+1. **Registro:** Ingrese a la consola oficial de [MongoDB Atlas](https://cloud.mongodb.com/) e inicie sesión.
+2. **Creación del Proyecto:** En el menú desplegable superior izquierdo, seleccione **View All Projects**, presione **New Project**, asigne el nombre `DuocAI_Proyecto` y complete la creación.
+3. **Despliegue del Clúster:** Ingrese al proyecto y haga clic en **Create Cluster**. Seleccione la capa gratuita dedicada (*M0 Free Tier*) en el proveedor de infraestructura y región geográfica de su preferencia.
+4. **Acceso de Seguridad de Red (Network Access):** En el menú lateral izquierdo, bajo la categoría *Security*, acceda a **Network Access**. Haga clic en **Add IP Address** y seleccione **Add Current IP Address** (`0.0.0.0/0`).
+5. **Credenciales de Acceso (Database Access):** En la sección **Database Access**, cree un usuario administrador de base de datos (`Atlas Admin`) y configure una contraseña estricta.
+6. **Extracción de la URI:** Diríjase a **Database** en la sección de *Deployment*, presione el botón **Connect** del clúster activo, seleccione la opción **Drivers** y copie la cadena de conexión provista (`MONGO_URI`).
 
-1.  **Registro:** Ingrese a [MongoDB Atlas](https://cloud.mongodb.com/) y cree una cuenta gratuita (o inicie sesión si ya posee una).
-2.  **Creación del Proyecto:** En la esquina superior izquierda de la interfaz, abra el menú desplegable y seleccione **View All Projects**. Haga clic en **New Project**, asígnele un nombre (por ejemplo, *DuocAI_Proyecto*) y créelo.
-3.  **Creación del Clúster:** Ingrese al proyecto recién creado. Haga clic en **Create Cluster** para desplegar un nuevo clúster. Puede seleccionar la capa gratuita (M0 Free Tier) en el proveedor de nube de su preferencia.
-4.  **Acceso de Red (Network Access):** En el menú lateral izquierdo, vaya a la sección **Network Access** bajo *Security*. Haga clic en *Add IP Address* y seleccione *Allow Access From Anywhere* (`0.0.0.0/0`) para permitir que el contenedor local se conecte sin bloqueos de firewall.
-5.  **Acceso a la Base de Datos (Database Access):** En la sección **Database Access**, cree un nuevo usuario de base de datos con una contraseña segura. Guarde estas credenciales.
-6.  **Obtener la URI de Conexión:** Vaya a **Database** bajo *Deployment*, haga clic en el botón **Connect** de su clúster, seleccione **Drivers** y copie la cadena de conexión (`MONGO_URI`). Esta es la que deberá inyectar en su archivo `.env`.
+### 2. Creación del Índice de Búsqueda Vectorial (Vector Search Index)
+Una vez ejecutado el pipeline de ingesta por primera vez, es mandatorio instanciar el índice matemático en Atlas:
 
-### 2. Configuración de Búsqueda Vectorial (Vector Search Index)
-
-Una vez que el clúster esté creado y haya ejecutado el proyecto por primera vez (para que la base de datos y la colección se creen automáticamente mediante la ingesta), es obligatorio configurar un índice de búsqueda vectorial:
-
-1.  Acceda a su cuenta en [MongoDB Atlas](https://cloud.mongodb.com/).
-2.  En el menú lateral izquierdo, diríjase a **Search & Vector Search** en la categoría DATABASE.
-3.  Haga clic en el botón **Create Search Index**.
-4.  Dentro de las opciones de **Search Type**, seleccione **Vector Search**.
-5.  En el apartado de **Index Name**, debe poner el nombre de **`vector_index`**.
-6.  Un poco mas abajo, en el menu desplegable que llevara el nombre de la base de datos, seleccione la colección donde hizo la ingesta, que por default viene como **`duoc_normativas`**.
-7.  Dentro de las opciones de **Configuration Method**, seleccione **JSON Editor** y presione *Next*.
-8.  En el editor de texto, pegue la siguiente configuración JSON:
+1. En la consola de MongoDB Atlas, vaya al menú izquierdo y haga clic en **Search & Vector Search**.
+2. Presione el botón **Create Search Index**.
+3. Bajo las opciones de *Search Type*, seleccione rigurosamente **Vector Search**.
+4. En el campo **Index Name**, asigne de forma estricta el identificador **`vector_index`**.
+5. En el menú desplegable de mapeo de colecciones, seleccione la base de datos `duocai_db` y apunte a la colección **`duoc_normativas`**.
+6. En el apartado de *Configuration Method*, marque la opción **JSON Editor** y presione *Next*.
+7. En el bloque de edición de código, reemplace el contenido existente por el siguiente esquema JSON estructurado:
 
 ```json
 {
@@ -50,90 +65,86 @@ Una vez que el clúster esté creado y haya ejecutado el proyecto por primera ve
       "type": "vector"
     },
     {
-      "path": "metadata.domain",
+      "path": "categoria",
       "type": "filter"
     }
   ]
 }
 ```
 
-9.  Finalmente da en **Next** y en **Create Vector Search Index** para crear el index.
+8. Haga clic en **Next** y finalice presionando **Create Vector Search Index**.
 
-### Notas Técnicas de la Configuración
-
-* **`numDimensions: 384`**: Corresponde a la dimensión del modelo `paraphrase-multilingual-MiniLM-L12-v2` utilizado en el pipeline RAG. Es fundamental que este valor coincida con la salida del modelo de embeddings para evitar errores de indexación.
-* **`similarity: "cosine"`**: Utiliza la similitud de coseno para medir la relevancia semántica de los documentos recuperados. Este algoritmo es ideal para comparar vectores de texto, ya que se enfoca en la orientación (contexto) más que en la magnitud.
-* **`metadata.domain`**: Configurado como tipo `filter` para permitir la segmentación estricta de los documentos institucionales. Esto habilita al sistema para discriminar búsquedas entre distintos reglamentos (Académico, Becas, etc.) de forma eficiente.
-
-
-## Instrucciones de Despliegue
-
-Para ejecutar este sistema en un entorno local aislado, asegúrese de tener **Podman** (o Docker) instalado y funcionando.
-
-### 1. Configuración de Variables de Entorno
-Clonar el repositorio y crear un archivo llamado `.env` en la raíz del proyecto, tomando como referencia el archivo `.env.example`. Inyecte sus propias credenciales:
-```text
-MONGO_URI=mongodb+srv://<su-usuario>:<su-password>@<su-cluster>.mongodb.net/
-GITHUB_TOKEN=<su-personal-access-token-de-github>
-LANGCHAIN_API_KEY=<su-api-key-de-langsmith>
-```
-
-## Guía de Ejecución del Proyecto
-
-Una vez configuradas las variables de entorno en el archivo `.env` y creado el índice en MongoDB Atlas, elija **UNO** de los siguientes métodos para poner en marcha DuocAI:
-
-### 1. Opción A: Ejecución mediante Contenedores (Podman / Docker)
-
-**¡Recomendado!** Al usar esta opción, se ahorra completamente el paso de instalar Python y dependencias de forma local. El `Containerfile` se encarga de empaquetar y aislar el entorno por usted.
-
-* **Construir la imagen:** Este comando leerá el archivo de configuración e instalará las dependencias de forma aislada dentro de la imagen.
-    ```bash
-    podman build -t duocai-app .
-    ```
-
-* **Ingesta de Documentos (Dentro del contenedor):** Corremos el script de ingesta utilizando la imagen recién creada. El parámetro `--rm` elimina este contenedor temporal al terminar de subir los datos a MongoDB Atlas.
-    ```bash
-    podman run --rm --env-file .env duocai-app python ingest.py
-    ```
-
-* **Levantar la Interfaz:** Levantamos el contenedor final mapeando el puerto `8501` para poder acceder a la aplicación web desde nuestra máquina anfitriona.
-    ```bash
-    podman run -p 8501:8501 --env-file .env duocai-app
-    ```
+### 📐 Notas Técnicas de la Configuración
+- **`numDimensions: 384`:** Coincide con la dimensión del espacio vectorial generado por el modelo local. Un desfase en este valor generará una excepción inmediata.
+- **`similarity: "cosine"`:** Aplica la métrica de similitud de coseno para evaluar la proximidad angular de los vectores.
+- **`path: "categoria"`:** Habilita un nodo de tipo `filter` que faculta a los agentes para discriminar búsquedas estructuradas cruzadas analizando los metadatos inyectados (`financiamiento` o `academico`).
 
 ---
 
-### 2. Opción B: Ejecución 100% Local (Requiere Python instalado)
+## 📦 Instrucciones de Despliegue y Contenerización
 
-* **Creación del Entorno Virtual (Recomendado):** Para evitar conflictos de versiones en su sistema, es una buena práctica aislar las dependencias creando un entorno virtual:
+El entorno de desarrollo se encuentra empaquetado para aislarse de forma hermética utilizando tecnologías de contenerización sin privilegios de root (`Podman`) o Docker tradicional.
+
+### 1. Configuración de Variables de Entorno
+Clone el repositorio en su máquina local. Renombre el archivo de referencia `.env.example` a **`.env`** en la raíz del proyecto e inyecte sus credenciales operativas reales:
+
+```text
+MONGO_URI=mongodb+srv://<usuario_atlas>:<password_atlas>@<cluster_uri>.mongodb.net/
+GITHUB_TOKEN=ghp_TuTokenPersonalDeGitHubModelsAqui
+LANGCHAIN_API_KEY=lsv_TuTokenDeObservabilidadLangSmithAqui
+LANGCHAIN_PROJECT=DuocAI_Proyecto
+```
+
+---
+
+## 🚀 Guía de Ejecución del Proyecto paso a paso
+
+Una vez configurado el archivo `.env`, puede inicializar el sistema de datos y la interfaz gráfica web seleccionando una de las siguientes dos opciones de despliegue:
+
+### 1. Opción A: Despliegue Automatizado mediante Contenedores (Podman / Docker)
+*Esta opción es la recomendada para entornos productivos, ya que compila de forma aislada las dependencias binarias necesarias (`PyMuPDF`, `sentence-transformers`) sin requerir la instalación local de Python.*
+
+- **Construcción de la Imagen del Sistema:** Compile la imagen base utilizando la configuración del manifiesto de capas local:
+  ```bash
+  podman build -t duocai-app .
+  ```
+- **Ejecución del Pipeline ETL de Ingesta (Obligatorio la primera vez):** Inicie el contenedor temporal para purgar la base de datos anterior, leer los reglamentos locales de la carpeta `/data`, fragmentar los textos e indexar los vectores en MongoDB Atlas:
+  ```bash
+  podman run --rm --env-file .env duocai-app python ingest.py
+  ```
+- **Despliegue del Servidor Web de la Aplicación:** Levante el contenedor en segundo plano exponiendo el puerto nativo de comunicación de red:
+  ```bash
+  podman run -p 8501:8501 --env-file .env duocai-app
+  ```
+
+### 2. Opción B: Despliegue en Entorno de Desarrollo Local Python
+*Esta opción requiere tener instalado Python 3.11 en el sistema anfitrión.*
+
+- **Aislamiento del Entorno Virtual:** Instancie un entorno virtual limpio para prevenir conflictos de dependencias con el sistema operativo:
+  ```bash
+  python -m venv venv
+  ```
+- **Activación del Entorno:** Active el entorno virtual dependiendo de su sistema operativo:
+  - *Sistemas Windows (PowerShell/CMD):*
     ```bash
-    python -m venv venv
+    venv\Scripts\activate
     ```
-
-* **Activación del Entorno:** Active el entorno virtual dependiendo de su sistema operativo:
-    * **En Windows:**
-        ```bash
-        venv\Scripts\activate
-        ```
-    * **En macOS/Linux:**
-        ```bash
-        source venv/bin/activate
-        ```
-
-* **Instalación de Dependencias:** Una vez activado el entorno, instale todas las librerías necesarias (*LangChain, Streamlit, PyMongo, etc.*) utilizando el archivo de requerimientos:
+  - *Sistemas macOS / Linux (Terminal):*
     ```bash
-    pip install -r requirements.txt
+    source venv/bin/activate
     ```
+- **Instalación Determinista de Librerías:** Instale los componentes y dependencias estrictas declaradas en el manifiesto:
+  ```bash
+  pip install -r requirements.txt
+  ```
+- **Ejecución de Ingesta de Datos (ETL Local):** Corra el script de orquestación de datos para poblar el clúster vectorial en la nube:
+  ```bash
+  python ingest.py
+  ```
+- **Inicialización de la Interfaz Gráfica (Streamlit):** Levante el servidor web local para interactuar con el ecosistema multi-agente:
+  ```bash
+  streamlit run app.py
+  ```
 
-* **Ingesta de Documentos (Obligatorio la primera vez):** Dado que su clúster de MongoDB es nuevo y está vacío, debe cargar el conocimiento de los PDFs institucionales en la base de datos vectorial antes de realizar consultas:
-    ```bash
-    python ingest.py
-    ```
-
-* **Levantar la Interfaz (Streamlit):** Finalmente, ejecute la aplicación para interactuar con el asistente virtual:
-    ```bash
-    streamlit run app.py
-    ```
-
-> **Nota:** La aplicación se abrirá automáticamente en su navegador apuntando a: `http://localhost:8501`
+> 🌐 **Nota:** Independiente de la opción de despliegue seleccionada, la aplicación estará disponible en su navegador apuntando a: `http://localhost:8501`
 
