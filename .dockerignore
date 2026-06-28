@@ -1,48 +1,34 @@
-# ==============================================================================
-# 1. ENTORNOS VIRTUALES (EVITA DUPLICIDAD DE BINARIOS DEL ANFITRIÓN)
-# ==============================================================================
+# Entornos virtuales
 venv/
 env/
 .venv/
 
-# ==============================================================================
-# 2. CACHÉ Y COMPILACIÓN DE RUNTIME DE PYTHON
-# ==============================================================================
+# Caché de Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 
-# ==============================================================================
-# 3. SEGURIDAD DE CREDENCIALES (SE INYECTAN DINÁMICAMENTE CON --ENV-FILE)
-# ==============================================================================
+# Secretos (Se inyectan dinámicamente, NO se copian a la imagen)
 .env
 .env.example
 
-# ==============================================================================
-# 4. SISTEMA DE CONTROL DE VERSIONES (REDUCE EL TAMAÑO DEL CONTEXTO DE CONSTRUCCIÓN)
-# ==============================================================================
+# Control de versiones
 .git/
 .gitignore
-.gitattributes
 
-# ==============================================================================
-# 5. METADATOS DE ENTORNOS DE DESARROLLO E IDEs
-# ==============================================================================
+# Metadatos IDE
 .vscode/
 .idea/
 
-# ==============================================================================
-# 6. DOCUMENTACIÓN COLOQUIAL (INNECESARIA PARA EL RUNTIME DE STREAMLIT)
-# ==============================================================================
+# Documentación (Innecesaria para que la app funcione)
 README.md
-*.docx
-*.pdf
 
-# ==============================================================================
-# 7. ARCHIVOS TEMPORALES Y PERSISTENCIA LOCAL DE BASES DE DATOS
-# ==============================================================================
-.DS_Store
-Thumbs.db
+# IMPORTANTE: NO ignorar data/ porque contiene el calendario JSON necesario
+# *.docx y *.pdf solo si no los necesitas en runtime
+
+# Archivos de Observabilidad Locales (El contenedor creará el suyo)
 *.db
 *.sqlite
+duocai_observability.db
+.DS_Store

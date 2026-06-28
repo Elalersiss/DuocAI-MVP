@@ -1,31 +1,39 @@
-# Directorios de entornos virtuales locales
+# ==========================================
+# ENTORNOS VIRTUALES Y CACHÉ
+# ==========================================
 venv/
 env/
 .venv/
-
-# Archivos de caché y compilación de Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 
-# Variables de entorno y llaves de API sensibles
+# ==========================================
+# CONFIGURACIONES LOCALES Y SECRETOS
+# ==========================================
 .env
-
-# Archivos temporales generados por el sistema operativo
-.DS_Store
-Thumbs.db
-
-# Configuraciones de entorno de trabajo y metadatos de VS Code
-.vscode/
-
-# Archivos de configuración interna y secretos locales de Streamlit
 .streamlit/
 
-# Bases de datos SQLite y persistencia de memoria local del framework
+# ==========================================
+# OBSERVABILIDAD Y BASES DE DATOS (EV3)
+# ==========================================
+# Ignoramos la base de datos de LangGraph para no saturar el repositorio
 *.db
 *.sqlite
+duocai_observability.db
 
-# Exclusión de documentos institucionales binarios pesados en la carpeta de datos
+# ==========================================
+# SISTEMA OPERATIVO Y METADATOS IDE
+# ==========================================
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# ==========================================
+# DOCUMENTOS Y DATOS CRUDOS
+# ==========================================
+# Descomentar si no quieren subir los PDFs al repo
 # data/*.pdf
 # data/*.docx

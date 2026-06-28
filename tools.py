@@ -1,108 +1,86 @@
 import os
 import json
 from dotenv import load_dotenv
-from crewai.tools import BaseTool
-from pydantic import BaseModel, Field
-from pymongo import MongoClient
+from langchain_core.tools import tool
 from langsmith import traceable
+from pymongo import MongoClient
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_mongodb import MongoDBAtlasVectorSearch
 
-# Carga de variables de entorno locales
+# ==============================================================================
+# 1. CONFIGURACIÓN INICIAL Y CONEXIONES
+# ==============================================================================
 load_dotenv()
 
-# ==============================================================================
-# 1. RECURSOS COMPARTIDOS (INICIALIZACIÓN ÚNICA PARA OPTIMIZACIÓN DE LATENCIA)
-# ==============================================================================
-# Instanciamiento del modelo de embeddings densos multilingües
+# Instanciamiento del modelo de embeddings densos multilingües (HuggingFace)
 embeddings_model = HuggingFaceEmbeddings(
     model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 )
 
 # Conexión al clúster de base de datos e indexador vectorial en la nube
 client = MongoClient(os.getenv("MONGO_URI"))
-vector_store = MongoDBAtlasVectorSearch(
-    collection=client["duocai_db"]["duoc_normativas"], 
-    embedding=embeddings_model, 
-    index_name="vector_index"
-)
+collection = client["duocai_db"]["duoc_normativas"]
 
 # ==============================================================================
-# 2. CONTRATOS DE VALIDACIÓN DE ENTRADA (CONTRATOS DE ESQUEMA EN PYDANTIC V2)
+# 2. LÓGICA DE BÚSQUEDA RAG (CON TRAZABILIDAD EN LANGSMITH)
 # ==============================================================================
-class EntradaReglamentos(BaseModel):
-    """Esquema de validación estricta para la herramienta de búsqueda RAG."""
-    query: str = Field(..., description="Texto de la consulta para buscar en los reglamentos de Duoc UC.")
-
-class EntradaCalendario(BaseModel):
-    """Esquema de validación estricta para la herramienta determinista del calendario."""
-    query: str = Field(default="", description="Texto de la consulta o filtro para el calendario académico.")
-
-# ==============================================================================
-# 3. CAPA LÓGICA DE PROCESAMIENTO INTERNO (PROCESOS TRAZABLES EN LANGSMITH)
-# ==============================================================================
-@traceable(run_type="tool", name="ejecutar_rag_reglamentos")
-def _proceso_interno_rag(query: str) -> str:
+@traceable(name="rag_retrieve")
+def retrieve(query: str, top_k: int = 5) -> list[dict]:
     """
-    Ejecuta una búsqueda de recuperación semántica sobre la base de datos documental.
-    
-    Extrae los k=7 fragmentos vectoriales más cercanos basándose en la métrica 
-    de similitud de coseno y consolida los bloques de texto.
+    Realiza la búsqueda vectorial en MongoDB Atlas y devuelve los fragmentos más relevantes.
+    La etiqueta @traceable permite que LangSmith mida exactamente cuánto tarda y qué busca esta función.
     """
-    docs = vector_store.as_retriever(search_kwargs={"k": 7}).invoke(query)
-    return "\n\n".join([doc.page_content for doc in docs])
-
-@traceable(run_type="tool", name="ejecutar_lectura_calendario")
-def _proceso_interno_calendario(query: str) -> str:
-    """
-    Realiza una extracción física determinista sobre el almacenamiento plano estructurado.
-    
-    Resuelve la localización del archivo JSON mediante cálculo dinámico de la ruta 
-    absoluta del sistema de archivos, mitigando excepciones de entorno.
-    """
-    directorio_actual = os.path.dirname(os.path.abspath(__file__))
-    ruta_archivo = os.path.join(directorio_actual, "data", "Calendario-Académico-Base-2026_v7.json")
-    
-    with open(ruta_archivo, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    return json.dumps(data, indent=2, ensure_ascii=False)
-
-# ==============================================================================
-# 4. INTERFACES DE INTEGRACIÓN DE HERRAMIENTAS (CLASES BASE DE CREWAI)
-# ==============================================================================
-class HerramientaReglamentos(BaseTool):
-    """Clase encargada de exponer la capa probabilística RAG al ecosistema agéntico."""
-    name: str = "consultar_reglamentos_duoc"
-    description: str = (
-        "Consulta la base de datos oficial de Duoc UC para resolver dudas sobre "
-        "reglamentos académicos, becas y beneficios institucionales."
+    vector_store = MongoDBAtlasVectorSearch(
+        collection=collection, 
+        embedding=embeddings_model, 
+        index_name="vector_index"
     )
-    args_schema: type[BaseModel] = EntradaReglamentos
-
-    def _run(self, query: str) -> str:
-        try:
-            return _proceso_interno_rag(query)
-        except Exception as e:
-            return f"Error en la base de datos: {e}"
-
-class HerramientaCalendario(BaseTool):
-    """Clase encargada de exponer la capa determinista de fechas al ecosistema agéntico."""
-    name: str = "consultar_fechas_calendario"
-    description: str = (
-        "Consulta las fechas límites del calendario académico 2026 "
-        "(suspensiones, retiros, exámenes, inicio de clases)."
-    )
-    args_schema: type[BaseModel] = EntradaCalendario
-
-    def _run(self, query: str) -> str:
-        try:
-            return _proceso_interno_calendario(query)
-        except Exception as e:
-            return f"Error al leer el calendario académico: {e}"
+    
+    # Realizamos la búsqueda de similitud semántica
+    docs = vector_store.similarity_search(query, k=top_k)
+    
+    # Retornamos una lista de diccionarios con el texto y metadatos
+    return [{"text": doc.page_content, "metadata": doc.metadata} for doc in docs]
 
 # ==============================================================================
-# 5. INSTANCIAMIENTO DE COMPONENTES EXPORTABLES
+# 3. HERRAMIENTAS EXPUESTAS AL AGENTE (USANDO @tool DE LANGCHAIN)
 # ==============================================================================
-# Objetos finales expuestos e inyectados en la definición de agentes autónomos
-herramienta_duoc = HerramientaReglamentos()
-herramienta_calendario = HerramientaCalendario()
+@tool
+def consultar_reglamentos_duoc(query: str) -> str:
+    """
+    Consulta la base de datos oficial de Duoc UC para resolver dudas sobre 
+    reglamentos académicos, becas y beneficios institucionales.
+    """
+    try:
+        docs = retrieve(query)
+        if not docs:
+            return "No se encontró información relevante en los reglamentos."
+        
+        # Formateamos los fragmentos para que el LLM los entienda fácilmente y pueda citarlos
+        return "\n\n---\n\n".join([f"Fragmento recuperado:\n{doc['text']}" for doc in docs])
+    except Exception as e:
+        return f"Error en la base de datos al buscar reglamentos: {e}"
+
+@tool
+def consultar_fechas_calendario(query: str) -> str:
+    """
+    Consulta las fechas límites y plazos exactos del calendario académico de este año 
+    (ej. suspensión de semestre, retiros, exámenes, inicio de clases).
+    """
+    try:
+        # AQUÍ: Pon la ruta exacta donde tienes guardado tu archivo JSON
+        ruta_calendario = "data/Calendario-Académico-Base-2026_v7.json"
+        
+        if not os.path.exists(ruta_calendario):
+            return "Error interno: El archivo del calendario académico no se encuentra en la ruta especificada."
+            
+        with open(ruta_calendario, 'r', encoding='utf-8') as archivo:
+            datos_calendario = json.load(archivo)
+            
+        # Convertimos el JSON a un texto formateado para que el LLM lo lea fácilmente
+        texto_calendario = json.dumps(datos_calendario, indent=2, ensure_ascii=False)
+        
+        return f"Aquí tienes la información completa del calendario académico. Busca la respuesta a la consulta del usuario aquí:\n{texto_calendario}"
+        
+    except Exception as e:
+        return f"Error al consultar el calendario: {e}"

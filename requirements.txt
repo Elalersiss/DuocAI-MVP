@@ -1,5 +1,3 @@
-crewai
-litellm
 streamlit
 python-dotenv
 pymongo
@@ -11,6 +9,7 @@ langchain-huggingface
 langchain-mongodb
 langchain-openai
 langsmith
+langgraph
 pymupdf
 docx2txt
 sentence-transformers
