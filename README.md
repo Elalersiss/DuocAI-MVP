@@ -162,5 +162,3 @@ El sistema registra automáticamente cada interacción en una base de datos SQLi
 > La base de datos `duocai_observability.db` se crea automáticamente al iniciar la aplicación por primera vez. No es necesario ningún paso de configuración adicional.
 
 ---
-
-## 📁 Estructura del Repositorio
