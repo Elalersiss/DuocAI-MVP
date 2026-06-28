@@ -1,3 +1,14 @@
+"""
+=============================================================================
+MÓDULO DE INTERFAZ DE USUARIO Y OBSERVABILIDAD (STREAMLIT)
+=============================================================================
+Este archivo es el punto de entrada (entrypoint) de la aplicación DuocAI.
+Despliega una interfaz web interactiva con dos pestañas principales:
+1. Un Chatbot conectado al grafo de LangGraph para resolver consultas.
+2. Un Dashboard Analítico que lee de una base de datos SQLite para mostrar 
+   métricas de rendimiento, costos y evaluaciones de calidad en tiempo real.
+"""
+
 import streamlit as st
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_openai import ChatOpenAI
@@ -8,55 +19,71 @@ import pandas as pd
 import os
 import json
 
+# Importación de la lógica del agente y el módulo de persistencia local
 from agent import app as agent_graph
 from observability import log_session, log_message, log_trace, log_evaluation
 
 # ==============================================================================
-# CONFIGURACIÓN
+# 1. CONFIGURACIÓN GLOBAL DE LA APLICACIÓN
 # ==============================================================================
 st.set_page_config(
-    page_title="DuocAI - Observabilidad EV3",
+    page_title="DuocAI - Asistente y Observabilidad",
     page_icon="🤖",
     layout="wide"
 )
 st.title("DuocAI: Asistente Académico con Observabilidad")
 
-tab_chat, tab_dashboard = st.tabs(["💬 Chat", "📊 Dashboard de Observabilidad (EV3)"])
+# Creación de pestañas modulares para separar la interacción del análisis
+tab_chat, tab_dashboard = st.tabs(["💬 Chat", "📊 Dashboard Analítico"])
 
 # ==============================================================================
-# VARIABLES DE SESIÓN
+# 2. INICIALIZACIÓN DEL ESTADO DE SESIÓN (MEMORIA VOLÁTIL)
 # ==============================================================================
+# Se asegura que la memoria de la conversación persista durante la recarga de la página
 if "messages" not in st.session_state:
     st.session_state.messages = []
+
+# Se genera un UUID único para identificar la sesión actual en la base de datos
 if "thread_id" not in st.session_state:
     st.session_state.thread_id = str(uuid.uuid4())
 
 # ==============================================================================
-# JUEZ LLM — Agent Goal Accuracy
-# Evalúa si la respuesta final fue realmente útil para el usuario.
-# Inspirado en el test_eval.py del profesor (clase 3.1).
+# 3. MOTOR DE EVALUACIÓN DE CALIDAD AUTOMÁTICO (JUEZ LLM)
 # ==============================================================================
 def evaluate_response_quality(question: str, answer: str) -> dict:
     """
-    Llama a un LLM como juez para determinar si la respuesta fue buena.
-    Retorna: {"verdict": "good"|"bad", "score": 1-10, "reason": str}
+    Actúa como un evaluador autónomo ("LLM-as-a-Judge") que audita 
+    la calidad de la respuesta final entregada por el agente principal.
+    
+    Args:
+        question (str): La consulta original del usuario.
+        answer (str): La respuesta final generada por el sistema.
+        
+    Returns:
+        dict: Un objeto con el veredicto estructurado:
+              - 'verdict' (str): "good", "bad", o "blocked".
+              - 'score' (int): Calificación del 1 al 10.
+              - 'reason' (str): Justificación en lenguaje natural.
     """
-    # Si la respuesta está vacía o es el mensaje de bloqueo, no evaluamos con LLM
+    # Exclusión rápida: Si el mensaje fue bloqueado previamente por un Guardrail, 
+    # no se gasta tokens en evaluarlo.
     if not answer or "bloqueado por las políticas" in answer:
-        return {"verdict": "blocked", "score": 1, "reason": "Mensaje bloqueado por guardrails."}
+        return {"verdict": "blocked", "score": 1, "reason": "Mensaje bloqueado por guardrails de seguridad."}
 
     try:
+        # Se instancia un LLM ligero para la tarea de evaluación
         judge_llm = ChatOpenAI(
             model="gpt-4o-mini",
-            temperature=0,
+            temperature=0,  # Alta determinación
             api_key=os.getenv("GITHUB_TOKEN"),
             base_url="https://models.inference.ai.azure.com",
         )
+        
+        # Prompt de sistema que exige una respuesta en formato JSON estricto
         prompt = f"""Eres un evaluador de calidad de respuestas de un asistente académico de DuocUC.
 Evalúa si la siguiente respuesta del asistente fue útil, relevante y correcta para la pregunta del estudiante.
 
 Pregunta del estudiante: {question}
-
 Respuesta del asistente: {answer}
 
 Responde ÚNICAMENTE con un JSON con exactamente estos campos:
@@ -67,43 +94,49 @@ Responde ÚNICAMENTE con un JSON con exactamente estos campos:
 }}
 """
         result = judge_llm.invoke(prompt)
-        # Limpiamos posibles backticks de markdown antes de parsear
+        
+        # Limpieza de sintaxis Markdown (```json) para evitar errores de parseo
         raw = result.content.strip().replace("```json", "").replace("```", "").strip()
         return json.loads(raw)
+        
     except Exception:
-        # Si el juez falla, usamos heurística simple como fallback
+        # Mecanismo de contingencia: Si la API falla, se usa una evaluación basada en palabras clave
         bad_signals = ["no se encontró", "lamentablemente", "no tengo información",
                        "no puedo responder", "error en la base de datos"]
         is_bad = any(s in answer.lower() for s in bad_signals)
         return {
             "verdict": "bad" if is_bad else "good",
             "score": 3 if is_bad else 8,
-            "reason": "Evaluación heurística (juez LLM no disponible)."
+            "reason": "Evaluación heurística de contingencia (API del Juez inaccesible)."
         }
 
-
 # ==============================================================================
-# PESTAÑA 1: CHAT
+# 4. LÓGICA DE LA INTERFAZ DE USUARIO (PESTAÑA 1: CHAT)
 # ==============================================================================
 with tab_chat:
-    st.markdown("Bienvenido. Este sistema utiliza LangGraph y RAG sobre normativas de Duoc UC.")
+    st.markdown("Bienvenido. Este sistema utiliza arquitectura RAG sobre normativas institucionales de Duoc UC.")
 
+    # 4.1. Renderizado del historial de mensajes
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
+    # 4.2. Captura y procesamiento del Input del Usuario
     if user_input := st.chat_input("Escribe tu consulta aquí..."):
         session_id = st.session_state.thread_id
+        
+        # Registro inicial de la sesión en la base de datos
         log_session(session_id)
-
         user_msg_id = str(uuid.uuid4())
 
+        # Muestra el mensaje del usuario en la pantalla
         st.session_state.messages.append({"role": "user", "content": user_input})
         with st.chat_message("user"):
             st.markdown(user_input)
 
+        # 4.3. Ejecución del Grafo de Agentes y Trazabilidad (Streaming)
         with st.chat_message("assistant"):
-            with st.spinner("Ejecutando grafo de agentes..."):
+            with st.spinner("Procesando consulta..."):
                 try:
                     config = {"configurable": {"thread_id": session_id}}
 
@@ -111,10 +144,9 @@ with tab_chat:
                     is_offensive  = 0
                     is_injection  = 0
                     step_order    = 0
-
                     node_start = time.time()
 
-                    # Ejecutamos el grafo en modo stream para capturar cada nodo
+                    # El modo "updates" permite interceptar el grafo nodo por nodo
                     for chunk in agent_graph.stream(
                         {"messages": [HumanMessage(content=user_input)]},
                         config=config,
@@ -124,18 +156,17 @@ with tab_chat:
                         duration_ms = (node_end - node_start) * 1000
 
                         for node_name, state in chunk.items():
-                            tool_name   = None
-                            # CORRECCIÓN: los tokens se leen solo del mensaje de ESTE nodo,
-                            # no del acumulado global, evitando el doble conteo.
+                            tool_name = None
                             node_p_tokens = 0
                             node_c_tokens = 0
-                            messages    = state.get("messages", [])
+                            messages = state.get("messages", [])
 
-                            # Capturamos flags de guardrails
+                            # Captura de banderas de seguridad
                             if node_name == "check_guardrails":
                                 is_offensive = 1 if state.get("is_offensive") else 0
                                 is_injection = 1 if state.get("is_prompt_injection") else 0
 
+                            # Extracción de metadatos (tokens y herramientas) del último mensaje
                             for msg in messages:
                                 if isinstance(msg, AIMessage) and msg.tool_calls:
                                     tool_name = msg.tool_calls[0]["name"]
@@ -145,7 +176,7 @@ with tab_chat:
                                 if isinstance(msg, AIMessage) and not msg.tool_calls and msg.content:
                                     final_answer = msg.content
 
-                            # Guardamos la traza de este nodo con su step_order
+                            # Registro atómico del nodo en SQLite
                             log_trace(
                                 trace_id=str(uuid.uuid4()),
                                 session_id=session_id,
@@ -160,20 +191,20 @@ with tab_chat:
 
                         node_start = time.time()
 
-                    # --- Evaluación de calidad con juez LLM ---
+                    # 4.4. Proceso de Evaluación y Persistencia Final
                     quality = evaluate_response_quality(user_input, final_answer)
                     verdict      = quality["verdict"]
                     score        = quality["score"]
                     reason       = quality["reason"]
                     error_msg    = reason if verdict == "bad" else None
 
-                    # Sobreescribimos con "blocked" si los guardrails actuaron
+                    # Aplicación de overrides de seguridad
                     if is_offensive or is_injection:
                         verdict   = "blocked"
                         score     = 1
-                        error_msg = "Mensaje bloqueado por guardrail de seguridad."
+                        error_msg = "Operación detenida por guardrail de seguridad."
 
-                    # Persistimos mensajes
+                    # Guardado histórico de los mensajes y la evaluación
                     log_message(user_msg_id, session_id, "user", user_input,
                                 is_offensive, is_injection, verdict, score, error_msg)
 
@@ -181,7 +212,6 @@ with tab_chat:
                     log_message(assistant_msg_id, session_id, "assistant", final_answer,
                                 0, 0, verdict, score, error_msg)
 
-                    # Persistimos evaluación LLM
                     log_evaluation(
                         eval_id=str(uuid.uuid4()),
                         session_id=session_id,
@@ -193,33 +223,36 @@ with tab_chat:
                         reason=reason
                     )
 
+                    # Muestra la respuesta en pantalla
                     st.markdown(final_answer)
                     st.session_state.messages.append({"role": "assistant", "content": final_answer})
 
                 except Exception as e:
+                    # 4.5. Manejo de Errores de API y Filtros Nativos de Azure
                     error_str = str(e)
                     if "content_filter" in error_str or "ResponsibleAI" in error_str:
-                        msg_bloqueado = "🛡️ Tu mensaje ha sido bloqueado por las políticas de seguridad de DuocAI."
+                        msg_bloqueado = "🛡️ Tu mensaje ha sido bloqueado por las políticas de seguridad del modelo subyacente."
                         st.markdown(msg_bloqueado)
                         st.session_state.messages.append({"role": "assistant", "content": msg_bloqueado})
                         log_message(str(uuid.uuid4()), session_id, "assistant", msg_bloqueado,
-                                    0, 1, "blocked", 1, "Bloqueado por filtro de contenido de Azure")
+                                    0, 1, "blocked", 1, "Bloqueo externo (Azure Content Filter)")
                     else:
-                        st.error(f"Error crítico en el flujo del agente: {e}")
-
+                        st.error(f"Error crítico en el flujo de ejecución: {e}")
 
 # ==============================================================================
-# PESTAÑA 2: DASHBOARD DE OBSERVABILIDAD
+# 5. PANEL ANALÍTICO DE OBSERVABILIDAD (PESTAÑA 2: DASHBOARD)
 # ==============================================================================
 with tab_dashboard:
-    st.header("Centro de Observabilidad — EV3 DuocAI")
+    st.header("Centro de Observabilidad y Telemetría")
 
     DB_PATH = "duocai_observability.db"
 
+    # Verificación de existencia de datos antes de renderizar gráficos
     if not os.path.exists(DB_PATH):
-        st.warning("Aún no hay datos. Realiza al menos una consulta en el chat.")
+        st.warning("La base de datos de observabilidad está vacía. Inicia una conversación en el chat.")
         st.stop()
 
+    # 5.1. Conexión y Extracción de Datos (DataFrames)
     conn = sqlite3.connect(DB_PATH)
     df_msgs   = pd.read_sql_query("SELECT * FROM messages WHERE role='user'", conn)
     df_traces = pd.read_sql_query("SELECT * FROM traces", conn)
@@ -227,106 +260,99 @@ with tab_dashboard:
     conn.close()
 
     if df_msgs.empty:
-        st.info("Realiza algunas consultas en el chat para poblar los gráficos.")
+        st.info("No hay suficientes datos. Interactúa con el chat para generar métricas.")
         st.stop()
 
-    # ------------------------------------------------------------------
-    # SECCIÓN 1 — KPIs principales
-    # ------------------------------------------------------------------
-    st.subheader("📌 Métricas Clave de Rendimiento (KPIs)")
+    # 5.2. SECCIÓN: KPIs (Indicadores Clave de Rendimiento)
+    st.subheader("📌 Métricas Globales de Operación")
 
     total_consultas   = len(df_msgs)
     lat_promedio_s    = df_traces["duration_ms"].sum() / max(total_consultas, 1) / 1000
     total_p_tokens    = df_traces["prompt_tokens"].sum()
     total_c_tokens    = df_traces["completion_tokens"].sum()
+    
+    # Cálculo de costo estimado en USD (Basado en pricing de gpt-4o-mini)
     costo_usd         = (total_p_tokens * 0.150 / 1_000_000) + (total_c_tokens * 0.600 / 1_000_000)
 
     buenos   = len(df_msgs[df_msgs["verdict"] == "good"])
     malos    = len(df_msgs[df_msgs["verdict"] == "bad"])
     bloqueados = len(df_msgs[df_msgs["verdict"] == "blocked"])
+    
     tasa_error = (malos / total_consultas * 100) if total_consultas > 0 else 0
     precision  = (buenos / total_consultas * 100) if total_consultas > 0 else 0
 
     col1, col2, col3, col4, col5 = st.columns(5)
     col1.metric("⏱ Latencia Promedio", f"{lat_promedio_s:.2f} s")
-    col2.metric("📨 Consultas Totales", f"{total_consultas}")
-    col3.metric("✅ Precisión", f"{precision:.1f}%")
+    col2.metric("📨 Interacciones", f"{total_consultas}")
+    col3.metric("✅ Tasa de Precisión", f"{precision:.1f}%")
     col4.metric("❌ Tasa de Error", f"{tasa_error:.1f}%")
-    col5.metric("💵 Costo Acumulado", f"${costo_usd:.5f} USD")
+    col5.metric("💵 Gasto Operativo", f"${costo_usd:.5f} USD")
 
     st.divider()
 
-    # ------------------------------------------------------------------
-    # SECCIÓN 2 — Calidad y Guardrails
-    # ------------------------------------------------------------------
-    st.subheader("🛡️ Calidad de Respuestas y Seguridad")
+    # 5.3. SECCIÓN: Calidad de Generación y Seguridad
+    st.subheader("🛡️ Auditoría de Calidad y Filtros de Seguridad")
     col_g1, col_g2, col_g3 = st.columns(3)
 
     with col_g1:
-        st.markdown("**Distribución de Calidad**")
-        # Construimos el DataFrame con las 3 categorías siempre presentes
+        st.markdown("**Distribución de Calidad (Respuestas)**")
         verdict_data = pd.DataFrame({
-            "Resultado": ["✅ Buena", "❌ Mala", "🛡️ Bloqueada"],
-            "Cantidad":  [buenos, malos, bloqueados]
+            "Clasificación": ["✅ Aceptable", "❌ Deficiente", "🛡️ Interceptada"],
+            "Volumen":  [buenos, malos, bloqueados]
         })
-        st.bar_chart(verdict_data.set_index("Resultado"))
+        st.bar_chart(verdict_data.set_index("Clasificación"))
 
     with col_g2:
-        st.markdown("**Score Promedio de Calidad (LLM Judge)**")
+        st.markdown("**Calificación Promedio (Evaluador LLM)**")
         if not df_evals.empty:
             score_por_verdict = df_evals.groupby("verdict")["score"].mean().reset_index()
-            score_por_verdict.columns = ["Verdict", "Score promedio"]
-            st.bar_chart(score_por_verdict.set_index("Verdict"))
+            score_por_verdict.columns = ["Veredicto", "Puntaje Medio (1-10)"]
+            st.bar_chart(score_por_verdict.set_index("Veredicto"))
         else:
-            st.info("Sin evaluaciones LLM aún.")
+            st.info("Esperando datos de evaluación...")
 
     with col_g3:
-        st.markdown("**Activaciones de Guardrails**")
+        st.markdown("**Frecuencia de Activación de Guardrails**")
         ofensivos   = int(df_msgs["is_offensive"].sum())
         inyecciones = int(df_msgs["is_prompt_injection"].sum())
         guardrail_df = pd.DataFrame({
-            "Guardrail": ["🤬 Ofensivo", "💉 Prompt Injection"],
-            "Activaciones": [ofensivos, inyecciones]
+            "Vector de Riesgo": ["🤬 Lenguaje Ofensivo", "💉 Inyección de Prompt"],
+            "Detecciones": [ofensivos, inyecciones]
         })
-        st.bar_chart(guardrail_df.set_index("Guardrail"))
+        st.bar_chart(guardrail_df.set_index("Vector de Riesgo"))
 
     st.divider()
 
-    # ------------------------------------------------------------------
-    # SECCIÓN 3 — Latencia y Recursos
-    # ------------------------------------------------------------------
-    st.subheader("⚙️ Rendimiento del Grafo de Agentes")
+    # 5.4. SECCIÓN: Análisis Estructural (Latencia y Tokens por Nodo)
+    st.subheader("⚙️ Análisis de Cuellos de Botella (Grafo)")
     col_l1, col_l2 = st.columns(2)
 
     with col_l1:
-        st.markdown("**Latencia Promedio por Nodo (ms)**")
+        st.markdown("**Latencia Promedio por Componente (ms)**")
         node_lat = (
             df_traces.groupby("node_name")["duration_ms"]
             .mean()
             .reset_index()
             .sort_values("duration_ms", ascending=False)
         )
-        node_lat.columns = ["Nodo", "Latencia Promedio (ms)"]
-        st.bar_chart(node_lat.set_index("Nodo"))
+        node_lat.columns = ["Componente", "Tiempo Promedio (ms)"]
+        st.bar_chart(node_lat.set_index("Componente"))
 
     with col_l2:
-        st.markdown("**Uso de Tokens por Nodo**")
+        st.markdown("**Consumo Estructural de Tokens**")
         token_df = df_traces.groupby("node_name")[["prompt_tokens", "completion_tokens"]].sum().reset_index()
         token_df = token_df.rename(columns={
-            "node_name": "Nodo",
-            "prompt_tokens": "Prompt",
-            "completion_tokens": "Completion"
+            "node_name": "Componente",
+            "prompt_tokens": "Entrada (Prompt)",
+            "completion_tokens": "Salida (Completion)"
         })
-        st.bar_chart(token_df.set_index("Nodo"))
+        st.bar_chart(token_df.set_index("Componente"))
 
     st.divider()
 
-    # ------------------------------------------------------------------
-    # SECCIÓN 4 — Trazabilidad Histórica (IE3 / IE4)
-    # ------------------------------------------------------------------
-    st.subheader("📜 Trazabilidad Histórica de Ejecución")
+    # 5.5. SECCIÓN: Telemetría Continua
+    st.subheader("📜 Bitácora de Ejecución Histórica")
 
-    # Evolución de latencia total por consulta a lo largo del tiempo
     if not df_traces.empty and "created_at" in df_traces.columns:
         df_traces["created_at"] = pd.to_datetime(df_traces["created_at"])
         latencia_tiempo = (
@@ -334,23 +360,23 @@ with tab_dashboard:
             .sum()
             .reset_index()
         )
-        latencia_tiempo.columns = ["Minuto", "Latencia Total (ms)"]
-        st.markdown("**Evolución de Latencia Total en el Tiempo**")
-        st.line_chart(latencia_tiempo.set_index("Minuto"))
+        latencia_tiempo.columns = ["Línea de Tiempo (Min)", "Latencia Acumulada (ms)"]
+        st.markdown("**Degradación de Latencia en el Tiempo**")
+        st.line_chart(latencia_tiempo.set_index("Línea de Tiempo (Min)"))
 
     st.divider()
 
-    # Tools más usadas
+    # Frecuencia de uso de Herramientas
     tools_usados = df_traces[df_traces["tool_used"].notna()]
     if not tools_usados.empty:
-        st.markdown("**Frecuencia de Uso de Tools**")
+        st.markdown("**Utilización de Herramientas (Data Sources)**")
         tool_counts = tools_usados["tool_used"].value_counts().reset_index()
-        tool_counts.columns = ["Tool", "Veces usada"]
-        st.bar_chart(tool_counts.set_index("Tool"))
+        tool_counts.columns = ["Herramienta invocada", "Número de usos"]
+        st.bar_chart(tool_counts.set_index("Herramienta invocada"))
         st.divider()
 
-    # Tabla completa de trazas
-    st.markdown("**Registro Detallado de Nodos Ejecutados**")
+    # Renderizado de la tabla maestra de SQL
+    st.markdown("**Log Crudo de Transacciones**")
     cols_show = [c for c in ["created_at", "session_id", "step_order", "node_name",
              "duration_ms", "prompt_tokens", "completion_tokens", "tool_used"]
              if c in df_traces.columns]
@@ -362,10 +388,8 @@ with tab_dashboard:
 
     st.divider()
 
-    # ------------------------------------------------------------------
-    # SECCIÓN 5 — Últimas evaluaciones LLM (IE1 / IE4)
-    # ------------------------------------------------------------------
-    st.subheader("🤖 Evaluaciones de Calidad (Agent Goal Accuracy — Juez LLM)")
+    # 5.6. SECCIÓN: Evaluaciones Cualitativas
+    st.subheader("🤖 Transcripción de Evaluaciones Autónomas")
     if not df_evals.empty:
         cols_eval = ["created_at", "verdict", "score", "reason", "question"]
         st.dataframe(
@@ -373,66 +397,59 @@ with tab_dashboard:
             use_container_width=True
         )
     else:
-        st.info("Aún no hay evaluaciones LLM registradas.")
+        st.info("Esperando resolución de ciclos de evaluación.")
 
     st.divider()
 
-    # ------------------------------------------------------------------
-    # SECCIÓN 6 — Análisis de Patrones y Anomalías (IE4 / IE7)
-    # ------------------------------------------------------------------
-    st.subheader("🔍 Análisis de Patrones y Anomalías")
+    # 5.7. SECCIÓN: Diagnóstico y Acciones Recomendadas
+    st.subheader("🔍 Diagnóstico Automatizado de Sistemas")
 
-    # Nodo más lento (cuello de botella)
+    # Identificación del peor escenario de rendimiento
     if not df_traces.empty:
         cuello = df_traces.loc[df_traces["duration_ms"].idxmax()]
         st.warning(
-            f"⚠️ **Cuello de botella detectado:** El nodo `{cuello['node_name']}` "
-            f"registró la mayor latencia individual: **{cuello['duration_ms']:.0f} ms** "
-            f"en la sesión `{cuello['session_id'][:8]}...`"
+            f"⚠️ **Alerta de Rendimiento:** El componente `{cuello['node_name']}` "
+            f"presentó una anomalía de latencia crítica: **{cuello['duration_ms']:.0f} ms** "
+            f"durante la sesión `{cuello['session_id'][:8]}...`"
         )
 
-    # Conversaciones con score bajo
+    # Identificación de respuestas degradadas
     if not df_evals.empty:
         bajas = df_evals[df_evals["score"] <= 4]
         if not bajas.empty:
-            st.error(f"❌ **{len(bajas)} respuesta(s) con score ≤ 4** detectadas. Revisar:")
+            st.error(f"❌ Se aislaron **{len(bajas)} evento(s)** con calidad deficiente. Auditoría sugerida:")
             for _, row in bajas.iterrows():
-                st.markdown(f"- **Pregunta:** {row['question'][:80]}...  \n  **Razón:** {row['reason']}")
+                st.markdown(f"- **Input:** {row['question'][:80]}...  \n  **Diagnóstico del Juez:** {row['reason']}")
         else:
-            st.success("✅ No se detectaron respuestas de baja calidad.")
+            st.success("✅ La integridad de las respuestas se mantiene por encima del umbral de calidad.")
 
     st.divider()
 
-    # ------------------------------------------------------------------
-    # SECCIÓN 7 — Recomendaciones de Optimización (IE7)
-    # ------------------------------------------------------------------
-    st.subheader("💡 Recomendaciones de Optimización del Sistema")
-
+    st.subheader("💡 Propuestas de Mitigación (Recomendaciones de Optimización)")
     recomendaciones = []
 
     if lat_promedio_s > 5:
         recomendaciones.append(
-            "🔴 **Alta latencia promedio (>5s):** Considerar reducir `top_k` en el RAG "
-            "de 5 a 3 fragmentos, o usar un modelo más pequeño para los guardrails."
+            "🔴 **Mitigación de Latencia (>5s):** Disminuir el parámetro `top_k` de los retrievers a un máximo de 3 fragmentos, "
+            "o delegar las funciones de guardrail a modelos más veloces/pequeños."
         )
 
     if tasa_error > 20:
         recomendaciones.append(
-            "🔴 **Alta tasa de error (>20%):** Revisar el `QUERY_REFORMULATION_PROMPT` "
-            "y el tamaño de los chunks en la ingesta (actualmente 1200 chars). "
-            "Aumentar el `chunk_overlap` de 300 a 400 podría mejorar la recuperación."
+            "🔴 **Mitigación de Errores (>20%):** Refinar el `QUERY_REFORMULATION_PROMPT`. "
+            "Se sugiere un reajuste en el pipeline de datos aumentando el `chunk_overlap` a 400 caracteres."
         )
 
     if ofensivos + inyecciones > 5:
         recomendaciones.append(
-            "🟡 **Múltiples activaciones de guardrails:** El sistema está siendo testeado "
-            "con mensajes maliciosos. Considerar añadir rate limiting por sesión."
+            "🟡 **Ataques de Superficie:** Se registra actividad maliciosa recurrente. "
+            "Se recomienda implementar un middleware de *Rate Limiting* (Limitación de Tasa) por IP o Sesión."
         )
 
     if tasa_error <= 10 and lat_promedio_s <= 3:
         recomendaciones.append(
-            "🟢 **Sistema operando dentro de parámetros óptimos.** "
-            "Latencia y precisión en rangos aceptables para producción académica."
+            "🟢 **Estado Operacional Óptimo:** La infraestructura opera dentro de tolerancias aceptables "
+            "para entornos académicos en producción."
         )
 
     for rec in recomendaciones:
