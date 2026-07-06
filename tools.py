@@ -25,7 +25,7 @@ collection = client["duocai_db"]["duoc_normativas"]
 # 2. LÓGICA DE BÚSQUEDA RAG (CON TRAZABILIDAD EN LANGSMITH)
 # ==============================================================================
 @traceable(name="rag_retrieve")
-def retrieve(query: str, top_k: int = 5) -> list[dict]:
+def retrieve(query: str, top_k: int = 8) -> list[dict]:
     """
     Realiza la búsqueda vectorial en MongoDB Atlas y devuelve los fragmentos más relevantes.
     La etiqueta @traceable permite que LangSmith mida exactamente cuánto tarda y qué busca esta función.

@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
 from langgraph.graph.message import add_messages
+from langgraph.checkpoint.memory import MemorySaver
 
 # Importaciones de LangChain para el manejo de modelos y mensajes
 from langchain_openai import ChatOpenAI
@@ -134,18 +135,22 @@ def generate_query(state: AgentState) -> AgentState:
         SystemMessage(content=f"Conversación:\n{conversation}")
     ]
     
-    # Genera la consulta optimizada
-    search_query = query_llm.invoke(prompt).content.strip()
+    # 1. Captura la respuesta completa, no solo el texto
+    llm_response = query_llm.invoke(prompt)
+    search_query = llm_response.content.strip()
     
-    # Modifica la llamada original a la herramienta reemplazando el argumento
-    # por la nueva query optimizada
+    # 2. Extrae los metadatos de los tokens de esa respuesta
+    tokens_usados = llm_response.usage_metadata
+    
     last_message = state["messages"][-1]
     updated_calls = [{**tc, "args": {"query": search_query}} for tc in last_message.tool_calls]
     
+    # 3. Inyecta explícitamente los metadatos al reconstruir el mensaje
     updated_message = AIMessage(
         id=last_message.id,
         content=last_message.content,
-        tool_calls=updated_calls
+        tool_calls=updated_calls,
+        usage_metadata=tokens_usados 
     )
     return {"messages": [updated_message]}
 
@@ -222,5 +227,8 @@ graph.add_conditional_edges(
 graph.add_edge("generate_query", "tools")
 graph.add_edge("tools", "agent")
 
-# Compilación final del motor de orquestación
-app = graph.compile()
+# 1. Instanciamos el checkpointer para la memoria
+memory = MemorySaver()
+
+# 2. Compilación final con el checkpointer incluido
+app = graph.compile(checkpointer=memory)

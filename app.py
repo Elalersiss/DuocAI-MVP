@@ -430,8 +430,9 @@ with tab_dashboard:
 
     if lat_promedio_s > 5:
         recomendaciones.append(
-            "🔴 **Mitigación de Latencia (>5s):** Disminuir el parámetro `top_k` de los retrievers a un máximo de 3 fragmentos, "
-            "o delegar las funciones de guardrail a modelos más veloces/pequeños."
+            "🔴 **Mitigación de Latencia (>5s):** Implementar un modelo de Reranking. "
+            "Esto permitiría mantener un 'top_k' alto (8) para calidad, pero optimizaría "
+            "la entrada al LLM con solo los 3 fragmentos más relevantes."
         )
 
     if tasa_error > 20:

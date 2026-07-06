@@ -65,6 +65,9 @@ def main():
         elif archivo.endswith(".txt"):
             print(f"Procesando TXT: {archivo} | Categoría de Metadato: {categoria_asignada}")
             docs_cargados = TextLoader(ruta, encoding="utf-8").load()
+        elif archivo.endswith(".md"):
+            print(f"Procesando Markdown: {archivo} | Categoría de Metadato: {categoria_asignada}")
+            docs_cargados = TextLoader(ruta, encoding="utf-8").load()
             
         # Inyección estructural del campo metadato para optimización del RAG
         for doc in docs_cargados:
